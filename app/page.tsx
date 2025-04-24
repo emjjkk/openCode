@@ -1,7 +1,7 @@
 "use client"
 import { useState, useRef, useEffect } from "react";
 import { LuRefreshCcw, LuDownload, LuSettings, LuCode, LuSparkles } from "react-icons/lu";
-import { FaReact } from "react-icons/fa6";
+import { FaReact, FaSpinner } from "react-icons/fa";
 
 export default function Home() {
   const [htmlCode, setHtmlCode] = useState<string>(
@@ -62,31 +62,42 @@ export default function Home() {
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
+          "HTTP-Referer": "YOUR_SITE_URL", // Optional but recommended
+          "X-Title": "Your App Name" // Optional but recommended
         },
         body: JSON.stringify({
-          model: "anthropic/claude-3-opus", // You can change this to any model you prefer
+          model: "agentica-org/deepcoder-14b-preview:free", // Using a free model
           messages: [
             {
               role: "system",
-              content: "You are an expert web developer. Return ONLY the HTML/CSS/JS code needed to fulfill the request. Do not include any explanations or markdown formatting. Only return the complete code that can be directly rendered in a browser."
+              content: "You are an expert web developer. Return ONLY the FULL HTML/CSS/JS code IN ONE FILE needed to fulfill the request. Do not include any explanations or markdown formatting. Only return the complete code that can be directly rendered in a browser. Never include ```html or ``` tags."
             },
             {
               role: "user",
               content: `Current code:\n${htmlCode}\n\nRequest: ${aiPrompt}`
             }
-          ]
+          ],
+          temperature: 0.7,
+          max_tokens: 4000
         })
       });
 
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
       const data = await response.json();
       if (data.choices && data.choices[0]?.message?.content) {
-        setHtmlCode(data.choices[0].message.content);
+        // Clean the response to remove any markdown code blocks
+        let cleanCode = data.choices[0].message.content;
+        cleanCode = cleanCode.replace(/```(html|javascript|css)?/g, '');
+        setHtmlCode(cleanCode.trim());
       } else {
-        throw new Error("Invalid response from AI");
+        throw new Error("Invalid response format from AI");
       }
     } catch (error) {
       console.error("AI generation error:", error);
-      alert("Failed to generate code. Please check your API key and try again.");
+      alert(`Failed to generate code: ${error} `);
     } finally {
       setIsLoading(false);
       setAiPrompt("");
@@ -123,7 +134,7 @@ export default function Home() {
 
   return (
     <main className="w-full h-screen bg-[#eee] dark:bg-[#000] text-black dark:text-white relative">
-      <header className="w-full flex items-center justify-between px-8 h-[60px] border-b border-[#111] absolute top-0">
+      <header className="w-full flex items-center justify-between px-4 h-[60px] border-b border-[#111] absolute top-0">
         <div className="flex items-center">
           <img src="/logo.png" alt="" className="w-[32px] h-auto" />
           <h1 className="text-xl font-semibold ml-1 pr-3 border-r border-[#111]">openCode</h1>
@@ -164,18 +175,27 @@ export default function Home() {
       >
         <div 
           ref={leftPanelRef}
-          className="h-full w-1/2 relative bg-[#1e1e1e] flex flex-col"
+          className="h-full w-1/2 relative flex flex-col"
         >
           <div className="px-2 py-1 bg-[#111] absolute top-2 left-8 text-sm rounded-sm flex items-center font-bold">
             <LuCode className="mr-2"/>index.html
           </div>
           
-          <textarea
-            className="w-full flex-grow text-white resize-none outline-none font-mono text-sm p-4 pt-10"
-            value={htmlCode}
-            onChange={(e) => setHtmlCode(e.target.value)}
-            spellCheck="false"
-          />
+          <div className="relative flex-grow">
+            <textarea
+              className="w-full h-full text-white resize-none outline-none font-mono text-sm p-4 pt-10"
+              value={htmlCode}
+              onChange={(e) => setHtmlCode(e.target.value)}
+              spellCheck="false"
+              disabled={isLoading}
+            />
+            {isLoading && (
+              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                <FaSpinner className="animate-spin text-3xl text-blue-500 mb-5" />
+                <p className="text-sm">Writing code...</p>
+              </div>
+            )}
+          </div>
           
           {/* AI Prompt Input */}
           <form onSubmit={handlePromptSubmit} className="border-t border-[#333] p-2 flex">
@@ -212,23 +232,24 @@ export default function Home() {
           onMouseDown={handleMouseDown}
         />
         
-        <div className="h-full flex-1 bg-white overflow-hidden">
+        <div className="h-full flex-1 bg-white overflow-hidden relative border-l border-[#111]">
           {isLoading ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="animate-pulse text-xl">AI is generating your code...</div>
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-20">
+              <div className="flex flex-col items-center">
+                <FaSpinner className="animate-spin text-2xl text-blue-500 mb-2" />
+              </div>
             </div>
-          ) : (
-            <iframe
-              ref={iframeRef}
-              title="Preview"
-              className="w-full h-full border-0"
-              sandbox="allow-same-origin"
-            />
-          )}
+          ) : null}
+          <iframe
+            ref={iframeRef}
+            title="Preview"
+            className="w-full h-full border-0"
+            sandbox="allow-same-origin"
+          />
         </div>
       </div>
 
-      <footer className="w-full flex items-center absolute bottom-0 px-8 py-1 border-t border-[#111] justify-between">
+      <footer className="w-full flex items-center absolute bottom-0 px-4 py-1 border-t border-[#111] justify-between">
         <p className="text-sm flex items-center">
           Built open-source with <FaReact className="mx-1"/> by @emjjkk
         </p>
